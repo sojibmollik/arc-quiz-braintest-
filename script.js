@@ -34,7 +34,7 @@ const questions = [
   { id: 20, question: "What is the main goal of the Arc community?", options: ["A) Speculative trading only", "B) Building and testing the Economic OS — driving onchain real-world finance, innovation, and eventual decentralized governance", "C) Competing with Solana memes", "D) Central bank digital currency replacement"], correct: 1 }
 ];
 
-// ==================== CORE QUIZ FUNCTIONS ====================
+// Render Question
 function renderQuestion() {
   const q = questions[currentQuestion];
   let html = `<div class="bg-slate-900 rounded-3xl p-8">
@@ -53,30 +53,14 @@ function renderQuestion() {
   document.getElementById('submit-btn').classList.toggle('hidden', currentQuestion !== 19);
 }
 
-window.selectAnswer = (i) => {
-  userAnswers[currentQuestion] = i;
-  renderQuestion();
-};
+window.selectAnswer = (i) => { userAnswers[currentQuestion] = i; renderQuestion(); };
+window.nextQuestion = () => { if(currentQuestion < 19){ currentQuestion++; renderQuestion(); } };
+window.prevQuestion = () => { if(currentQuestion > 0){ currentQuestion--; renderQuestion(); } };
 
-window.nextQuestion = () => {
-  if (currentQuestion < 19) {
-    currentQuestion++;
-    renderQuestion();
-  }
-};
-
-window.prevQuestion = () => {
-  if (currentQuestion > 0) {
-    currentQuestion--;
-    renderQuestion();
-  }
-};
-
+// Submit Quiz + Save on Chain
 window.submitQuiz = async () => {
   let score = 0;
-  questions.forEach((q, i) => {
-    if (userAnswers[i] === q.correct) score += 10;
-  });
+  questions.forEach((q, i) => { if(userAnswers[i] === q.correct) score += 10; });
 
   document.getElementById('score-display').textContent = score;
   document.getElementById('score-message').innerHTML = score === 200 ? "🏆 Perfect Score!" : "🎉 Good Job!";
@@ -85,7 +69,7 @@ window.submitQuiz = async () => {
   if (connectedAccount) await saveScoreOnChain(score);
 };
 
-// ==================== WALLET & ON-CHAIN ====================
+// Wallet Connect
 async function connectWallet() {
   if (!window.ethereum) return alert("MetaMask Install করো!");
   try {
@@ -93,12 +77,12 @@ async function connectWallet() {
     connectedAccount = accounts[0];
     await window.ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: ARC_TESTNET.chainId }] });
     document.getElementById('wallet-text').textContent = `${connectedAccount.slice(0,6)}...${connectedAccount.slice(-4)}`;
-    alert("✅ Connected to Arc Testnet!");
   } catch (err) {
     alert("Wallet Connect Failed");
   }
 }
 
+// Daily Check-in with Transaction
 async function dailyCheckIn() {
   if (!connectedAccount) return alert("Wallet Connect করো আগে!");
   try {
@@ -106,26 +90,31 @@ async function dailyCheckIn() {
     const signer = await provider.getSigner();
     const contract = new ethers.Contract(CONTRACT_ADDRESS, ["function dailyCheckIn() public"], signer);
     const tx = await contract.dailyCheckIn();
+    alert("⛓️ Transaction Sent! MetaMask এ Confirm করো...");
     await tx.wait();
-    alert("✅ Daily Check-in Successful!");
+    alert("✅ Daily Check-in Successful on Blockchain!");
   } catch (err) {
-    alert("Already checked in today!");
+    alert("Already checked in today or Transaction Failed");
   }
 }
 
+// Save Score with Transaction
 async function saveScoreOnChain(score) {
   try {
     const provider = new ethers.BrowserProvider(window.ethereum);
     const signer = await provider.getSigner();
     const contract = new ethers.Contract(CONTRACT_ADDRESS, ["function saveScore(uint256 _score) public"], signer);
     const tx = await contract.saveScore(score);
+    alert("⛓️ Transaction Sent! MetaMask এ Confirm করো...");
     await tx.wait();
     alert(`✅ Score ${score}/200 Saved on Blockchain!`);
   } catch (err) {
     console.error(err);
+    alert("Score Save Failed");
   }
 }
 
+// Leaderboard
 async function showLeaderboard() {
   const container = document.getElementById('quiz-container');
   container.innerHTML = `
@@ -146,5 +135,5 @@ async function showLeaderboard() {
 
 window.restartQuiz = () => location.reload();
 
-// Start Quiz
+// Start
 renderQuestion();
