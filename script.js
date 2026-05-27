@@ -320,3 +320,56 @@ async function showLeaderboard() {
       </div>
     </div>`;
 }
+// ==================== WALLET, DAILY & LEADERBOARD ====================
+
+async function connectWallet() {
+  if (!window.ethereum) return alert("MetaMask Install করো!");
+  
+  try {
+    const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+    connectedAccount = accounts[0];
+
+    await window.ethereum.request({
+      method: 'wallet_switchEthereumChain',
+      params: [{ chainId: ARC_TESTNET.chainId }]
+    });
+
+    document.getElementById('wallet-text').textContent = `${connectedAccount.slice(0,6)}...${connectedAccount.slice(-4)}`;
+    alert("✅ Connected to Arc Testnet!");
+  } catch (err) {
+    console.error(err);
+    alert("Wallet Connect Failed");
+  }
+}
+
+async function dailyCheckIn() {
+  if (!connectedAccount) return alert("Wallet Connect করো আগে!");
+  try {
+    const provider = new ethers.BrowserProvider(window.ethereum);
+    const signer = await provider.getSigner();
+    const contract = new ethers.Contract(CONTRACT_ADDRESS, ["function dailyCheckIn() public"], signer);
+    const tx = await contract.dailyCheckIn();
+    await tx.wait();
+    alert("✅ Daily Check-in Successful!");
+  } catch (err) {
+    alert("Already checked in today!");
+  }
+}
+
+async function showLeaderboard() {
+  const container = document.getElementById('quiz-container');
+  container.innerHTML = `
+    <div class="bg-slate-900 rounded-3xl p-8">
+      <h2 class="text-3xl font-bold text-center mb-8">🏆 Arc Quiz Leaderboard</h2>
+      <div class="space-y-4">
+        <div class="flex justify-between bg-slate-800 p-5 rounded-2xl">
+          <span>1. 0x1234...abcd</span>
+          <span class="text-cyan-400 font-bold">200/200</span>
+        </div>
+        <div class="flex justify-between bg-slate-800 p-5 rounded-2xl">
+          <span>2. ${connectedAccount ? connectedAccount.slice(0,8)+'...' : 'Your Address'}</span>
+          <span class="text-cyan-400 font-bold">Your Score</span>
+        </div>
+      </div>
+    </div>`;
+}
