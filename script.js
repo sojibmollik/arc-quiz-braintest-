@@ -1,80 +1,15 @@
-
-// ==================== Arc On-Chain Integration ====================
 const CONTRACT_ADDRESS = "0xfCA7019658BB591EDcd38cd1942052B8dEF9";
 
 const ARC_TESTNET = {
   chainId: "0x4cef52",
   chainName: "Arc Testnet",
   nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 6 },
-  rpcUrls: ["https://rpc.testnet.arc.network"],
-  blockExplorerUrls: ["https://testnet.arcscan.app"]
+  rpcUrls: ["https://rpc.testnet.arc.network"]
 };
 
 let connectedAccount = null;
-
-// Wallet Connect
-async function connectWallet() {
-  if (!window.ethereum) return alert("Please install MetaMask!");
-
-  try {
-    const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-    connectedAccount = accounts[0];
-
-    await window.ethereum.request({
-      method: 'wallet_switchEthereumChain',
-      params: [{ chainId: ARC_TESTNET.chainId }]
-    });
-
-    document.getElementById('wallet-text').textContent = `${connectedAccount.slice(0,6)}...${connectedAccount.slice(-4)}`;
-    document.getElementById('connect-btn').classList.add('!bg-green-500');
-    
-    alert("✅ Connected to Arc Testnet!");
-  } catch (err) {
-    console.error(err);
-    alert("Failed to connect wallet");
-  }
-}
-
-// Daily Check-in
-async function dailyCheckIn() {
-  if (!connectedAccount) return alert("First connect your wallet!");
-
-  try {
-    const provider = new ethers.BrowserProvider(window.ethereum);
-    const signer = await provider.getSigner();
-    const abi = ["function dailyCheckIn() public"];
-    const contract = new ethers.Contract(CONTRACT_ADDRESS, abi, signer);
-
-    const tx = await contract.dailyCheckIn();
-    await tx.wait();
-    alert("✅ Daily Check-in Successful! 🎉");
-  } catch (err) {
-    alert("You have already checked in today or transaction failed.");
-  }
-}
-
-// Save Score on Blockchain (Quiz Submit এ কল করা হবে)
-async function saveScoreOnChain(score) {
-  if (!connectedAccount) {
-    alert("Score saved locally. Connect wallet to save on blockchain.");
-    return;
-  }
-
-  try {
-    const provider = new ethers.BrowserProvider(window.ethereum);
-    const signer = await provider.getSigner();
-    const abi = ["function saveScore(uint256 _score) public"];
-    const contract = new ethers.Contract(CONTRACT_ADDRESS, abi, signer);
-
-    const tx = await contract.saveScore(score);
-    alert("⛓️ Saving score on Arc Testnet...");
-    await tx.wait();
-    alert(`✅ Score ${score}/200 saved on blockchain!`);
-  } catch (err) {
-    console.error(err);
-    alert("Failed to save score on chain.");
-  }
-}// ==================== Arc Quiz Script ====================
+let currentQuestion = 0;
+let userAnswers = new Array(20).fill(null);
 
 const questions = [
   { id: 1, question: "What is Arc primarily described as?", options: ["A) A DeFi protocol on Ethereum", "B) An Economic Operating System (OS) for the internet, built as a stablecoin-native L1 blockchain", "C) A centralized payment app", "D) A Layer-2 scaling solution"], correct: 1 },
@@ -99,245 +34,67 @@ const questions = [
   { id: 20, question: "What is the main goal of the Arc community?", options: ["A) Speculative trading only", "B) Building and testing the Economic OS — driving onchain real-world finance, innovation, and eventual decentralized governance", "C) Competing with Solana memes", "D) Central bank digital currency replacement"], correct: 1 }
 ];
 
-let currentQuestion = 0;
-let userAnswers = new Array(questions.length).fill(null);
-
-// Render Current Question
+// ==================== CORE QUIZ FUNCTIONS ====================
 function renderQuestion() {
-  const container = document.getElementById('quiz-container');
   const q = questions[currentQuestion];
+  let html = `<div class="bg-slate-900 rounded-3xl p-8">
+    <div class="flex gap-4 mb-6">
+      <div class="w-10 h-10 bg-cyan-500 text-black rounded-2xl flex items-center justify-center font-bold text-xl">${q.id}</div>
+      <h2 class="text-2xl font-semibold">${q.question}</h2>
+    </div>`;
 
-  let html = `
-    <div class="bg-slate-900 rounded-3xl p-8 question-card">
-      <div class="flex gap-3 mb-6">
-        <div class="w-8 h-8 bg-cyan-500 text-black font-bold rounded-2xl flex items-center justify-center flex-shrink-0">${q.id}</div>
-        <h2 class="text-2xl font-semibold leading-tight">${q.question}</h2>
-      </div>
-      <div class="space-y-3" id="options-container">
-  `;
-
-  q.options.forEach((option, index) => {
-    const isSelected = userAnswers[currentQuestion] === index;
-    html += `
-      <div onclick="selectAnswer(${index})" 
-           class="option cursor-pointer border border-slate-700 hover:border-cyan-400 ${isSelected ? 'selected' : ''} px-6 py-5 rounded-2xl text-lg">
-        ${option}
-      </div>
-    `;
+  q.options.forEach((opt, i) => {
+    const selected = userAnswers[currentQuestion] === i ? 'bg-cyan-400 text-black' : 'border-slate-700 hover:border-cyan-400';
+    html += `<div onclick="selectAnswer(${i})" class="option ${selected} px-6 py-5 rounded-2xl text-lg mb-3 cursor-pointer border">${opt}</div>`;
   });
+  html += `</div>`;
+  document.getElementById('quiz-container').innerHTML = html;
 
-  html += `</div></div>`;
-  container.innerHTML = html;
-
-  // Progress
-  document.getElementById('current-q').textContent = q.id;
-  document.getElementById('progress-bar').style.width = `${((currentQuestion + 1) / 20) * 100}%`;
-
-  // Buttons
   document.getElementById('submit-btn').classList.toggle('hidden', currentQuestion !== 19);
-  document.getElementById('next-btn').classList.toggle('hidden', currentQuestion === 19);
 }
 
-// Select Answer
-window.selectAnswer = function(index) {
-  userAnswers[currentQuestion] = index;
+window.selectAnswer = (i) => {
+  userAnswers[currentQuestion] = i;
   renderQuestion();
 };
 
-// Next Question
-window.nextQuestion = function() {
+window.nextQuestion = () => {
   if (currentQuestion < 19) {
     currentQuestion++;
     renderQuestion();
   }
 };
 
-// Previous Question
-window.prevQuestion = function() {
+window.prevQuestion = () => {
   if (currentQuestion > 0) {
     currentQuestion--;
     renderQuestion();
   }
 };
 
-// Submit Quiz
-// Save score on blockchain
-if (connectedAccount) {
-  await saveScoreOnChain(score);   // 
-}
-window.submitQuiz = function() {
+window.submitQuiz = async () => {
   let score = 0;
-  let resultsHTML = '';
-  // Save to blockchain
-if (score > 0) {
-  saveScoreOnChain(score);
-}
-
   questions.forEach((q, i) => {
-    const userAns = userAnswers[i];
-    const isCorrect = userAns === q.correct;
-    if (isCorrect) score += 10;
-
-    resultsHTML += `
-      <div class="mb-6 p-6 rounded-2xl ${isCorrect ? 'bg-green-900/30 border border-green-500' : 'bg-red-900/30 border border-red-500'}">
-        <div class="flex justify-between items-start">
-          <p class="font-medium pr-4">${q.id}. ${q.question}</p>
-          <span class="font-mono text-xl ${isCorrect ? 'text-green-400' : 'text-red-400'}">
-            ${isCorrect ? '✓' : '✕'}
-          </span>
-        </div>
-        <div class="mt-4 text-sm">
-          <p class="text-gray-400">Your answer: <span class="${isCorrect ? 'text-green-400' : 'text-red-400'}">${q.options[userAns] || 'Not answered'}</span></p>
-          ${!isCorrect ? `<p class="text-cyan-400 mt-1">Correct answer: ${q.options[q.correct]}</p>` : ''}
-        </div>
-      </div>
-    `;
+    if (userAnswers[i] === q.correct) score += 10;
   });
 
   document.getElementById('score-display').textContent = score;
-  document.getElementById('score-message').innerHTML = 
-    score === 200 ? "🏆 Perfect Score! You are an Arc Expert!" :
-    score >= 150 ? "🎉 Excellent! You're ready to build on Arc." :
-    "👍 Good effort! Keep learning about Arc.";
-
-  document.getElementById('results-list').innerHTML = resultsHTML;
+  document.getElementById('score-message').innerHTML = score === 200 ? "🏆 Perfect Score!" : "🎉 Good Job!";
   document.getElementById('results-modal').classList.remove('hidden');
+
+  if (connectedAccount) await saveScoreOnChain(score);
 };
 
-// Restart Quiz
-window.restartQuiz = function() {
-  currentQuestion = 0;
-  userAnswers = new Array(questions.length).fill(null);
-  document.getElementById('results-modal').classList.add('hidden');
-  renderQuestion();
-};
-
-// Initialize
-renderQuestion();
-// ==================== LEADERBOARD FUNCTION ====================
-async function showLeaderboard() {
-  const container = document.getElementById('quiz-container');
-  
-  container.innerHTML = `
-    <div class="bg-slate-900 rounded-3xl p-8 min-h-[500px]">
-      <h2 class="text-3xl font-bold text-center mb-8 flex items-center justify-center gap-3">
-        🏆 Arc Quiz Leaderboard
-      </h2>
-      <div id="leaderboard-content" class="space-y-4">
-        <p class="text-center text-gray-400">Loading leaderboard...</p>
-      </div>
-    </div>`;
-
-  try {
-    // Public RPC দিয়ে হাই স্কোর দেখানো হচ্ছে
-    const provider = new ethers.JsonRpcProvider("https://rpc.testnet.arc.network");
-    const abi = ["function highScores(address) view returns (uint256)"];
-    const contract = new ethers.Contract(CONTRACT_ADDRESS, abi, provider);
-
-    // এখন কয়েকটা ঠিকানা দেখানো হবে (তোমারটা সহ)
-    const sampleAddresses = [
-      connectedAccount || "0xYourAddress...",
-      "0x8aA4b5cD1234567890abcdef1234567890",
-      "0x7bB9eF1234567890abcdef1234567890",
-      "0x9cC8fG1234567890abcdef1234567890"
-    ];
-
-    let html = '';
-
-    for (let i = 0; i < sampleAddresses.length; i++) {
-      let score = "180"; // পরে রিয়েল স্কোর আসবে
-      try {
-        if (sampleAddresses[i] !== "0xYourAddress...") {
-          const s = await contract.highScores(sampleAddresses[i]);
-          score = s.toString();
-        }
-      } catch (e) {}
-
-      html += `
-        <div class="flex justify-between items-center bg-slate-800 px-6 py-4 rounded-2xl">
-          <div class="flex items-center gap-4">
-            <span class="font-bold text-xl">${i+1}</span>
-            <span class="font-mono">${sampleAddresses[i].slice(0,8)}...${sampleAddresses[i].slice(-6)}</span>
-          </div>
-          <div class="text-right">
-            <span class="text-cyan-400 font-bold text-2xl">${score}</span>
-            <span class="text-gray-400 text-sm">/200</span>
-          </div>
-        </div>`;
-    }
-
-    document.getElementById('leaderboard-content').innerHTML = html;
-
-  } catch (err) {
-    console.error(err);
-    document.getElementById('leaderboard-content').innerHTML = `<p class="text-red-400 text-center">Leaderboard 
-    </p>`;
-  }
-}
-// ==================== WALLET & ON-CHAIN FUNCTIONS ====================
-
+// ==================== WALLET & ON-CHAIN ====================
 async function connectWallet() {
   if (!window.ethereum) return alert("MetaMask Install করো!");
   try {
     const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
     connectedAccount = accounts[0];
     await window.ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: ARC_TESTNET.chainId }] });
-    
-    document.getElementById('wallet-text').textContent = `${connectedAccount.slice(0,6)}...${connectedAccount.slice(-4)}`;
-  } catch (err) {
-    alert("Wallet Connect Failed");
-  }
-}
-
-async function dailyCheckIn() {
-  if (!connectedAccount) return alert("First connect your wallet!");
-  try {
-    const provider = new ethers.BrowserProvider(window.ethereum);
-    const signer = await provider.getSigner();
-    const contract = new ethers.Contract(CONTRACT_ADDRESS, ["function dailyCheckIn() public"], signer);
-    const tx = await contract.dailyCheckIn();
-    await tx.wait();
-    alert("✅ Daily Check-in Successful!");
-  } catch (err) {
-    alert("You already checked in today!");
-  }
-}
-
-async function showLeaderboard() {
-  const container = document.getElementById('quiz-container');
-  container.innerHTML = `
-    <div class="bg-slate-900 rounded-3xl p-8">
-      <h2 class="text-3xl font-bold text-center mb-8">🏆 Arc Quiz Leaderboard</h2>
-      <div class="space-y-4">
-        <div class="bg-slate-800 p-5 rounded-2xl flex justify-between">
-          <span>1. 0x1234...abcd</span>
-          <span class="text-cyan-400 font-bold">200/200</span>
-        </div>
-        <div class="bg-slate-800 p-5 rounded-2xl flex justify-between">
-          <span>2. ${connectedAccount ? connectedAccount.slice(0,8)+'...' : 'Your Wallet'}</span>
-          <span class="text-cyan-400 font-bold">Your Score</span>
-        </div>
-      </div>
-    </div>`;
-}
-// ==================== WALLET, DAILY & LEADERBOARD ====================
-
-async function connectWallet() {
-  if (!window.ethereum) return alert("MetaMask Install করো!");
-  
-  try {
-    const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-    connectedAccount = accounts[0];
-
-    await window.ethereum.request({
-      method: 'wallet_switchEthereumChain',
-      params: [{ chainId: ARC_TESTNET.chainId }]
-    });
-
     document.getElementById('wallet-text').textContent = `${connectedAccount.slice(0,6)}...${connectedAccount.slice(-4)}`;
     alert("✅ Connected to Arc Testnet!");
   } catch (err) {
-    console.error(err);
     alert("Wallet Connect Failed");
   }
 }
@@ -353,6 +110,19 @@ async function dailyCheckIn() {
     alert("✅ Daily Check-in Successful!");
   } catch (err) {
     alert("Already checked in today!");
+  }
+}
+
+async function saveScoreOnChain(score) {
+  try {
+    const provider = new ethers.BrowserProvider(window.ethereum);
+    const signer = await provider.getSigner();
+    const contract = new ethers.Contract(CONTRACT_ADDRESS, ["function saveScore(uint256 _score) public"], signer);
+    const tx = await contract.saveScore(score);
+    await tx.wait();
+    alert(`✅ Score ${score}/200 Saved on Blockchain!`);
+  } catch (err) {
+    console.error(err);
   }
 }
 
@@ -373,3 +143,8 @@ async function showLeaderboard() {
       </div>
     </div>`;
 }
+
+window.restartQuiz = () => location.reload();
+
+// Start Quiz
+renderQuestion();
