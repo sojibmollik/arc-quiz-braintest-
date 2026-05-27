@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="https://cdn.ethers.io/lib/ethers-6.13.5.umd.min.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Arc Quiz • Economic OS</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css" rel="stylesheet">
+  <style>
+    body {
+      background: linear-gradient(135deg, #0f172a 0%, #1e2937 100%);
+    }
+    .question-card {
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .question-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+    }
+    .option {
+      transition: all 0.2s ease;
+    }
+    .option:hover {
+      background-color: #334155;
+      transform: translateX(8px);
+    }
+    .selected {
+      background-color: #22d3ee !important;
+      color: #0f172a;
+      border-color: #67e8f9;
+    }
+    .progress-bar {
+      transition: width 0.4s ease;
+    }
+  </style>
+</head>
+<body class="min-h-screen text-white">
+  <div class="max-w-4xl mx-auto px-4 py-8">
+    <!-- Header -->
+    <button onclick="showLeaderboard()" 
+  class="flex items-center gap-2 px-5 py-3 bg-amber-600 hover:bg-amber-500 rounded-2xl font-medium transition">
+  <i class="fa-solid fa-trophy"></i>
+  <span>Leaderboard</span>
+</button>
+
+    <button onclick="connectWallet()" id="connect-btn"
+  class="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-black font-semibold rounded-2xl transition">
+  <i class="fa-solid fa-wallet"></i>
+  <span id="wallet-text">Connect Wallet</span>
+</button>
+    <div class="flex items-center justify-between mb-8">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 bg-cyan-500 rounded-2xl flex items-center justify-center text-2xl font-bold">A</div>
+        <div>
+          <h1 class="text-3xl font-bold tracking-tight">Arc Quiz</h1>
+          <p class="text-cyan-400 text-sm">Economic Operating System</p>
+        </div>
+      </div>
+      <div id="progress" class="text-right">
+        <div class="text-sm text-gray-400">Question <span id="current-q" class="font-mono text-cyan-400">1</span>/20</div>
+        <div class="h-2 w-48 bg-gray-700 rounded-full overflow-hidden mt-1">
+          <div id="progress-bar" class="progress-bar h-full bg-gradient-to-r from-cyan-400 to-blue-500 w-1/20"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quiz Container -->
+    <div id="quiz-container">
+      <!-- Questions will be injected here by JS -->
+    </div>
+
+    <!-- Navigation -->
+    <div class="flex justify-between items-center mt-8">
+      <button onclick="prevQuestion()" id="prev-btn"
+        class="flex items-center gap-2 px-6 py-3 bg-gray-800 hover:bg-gray-700 rounded-2xl font-medium transition">
+        <i class="fa-solid fa-arrow-left"></i> Previous
+      </button>
+      
+      <button onclick="nextQuestion()" id="next-btn"
+        class="flex items-center gap-2 px-8 py-3 bg-cyan-500 hover:bg-cyan-400 text-black rounded-2xl font-semibold transition">
+        Next <i class="fa-solid fa-arrow-right"></i>
+      </button>
+    </div>
+
+    <!-- Submit Button (shown on last question) -->
+    <button onclick="submitQuiz()" id="submit-btn"
+      class="hidden w-full mt-6 py-4 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-black font-bold text-xl rounded-3xl transition">
+      Submit Quiz & See Results
+    </button>
+  </div>
+
+  <!-- Results Modal -->
+  <div id="results-modal" class="hidden fixed inset-0 bg-black/80 flex items-center justify-center z-50">
+    <div class="bg-slate-900 rounded-3xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-hidden">
+      <div class="p-8 border-b border-slate-700">
+        <h2 class="text-4xl font-bold text-center mb-2">Your Score</h2>
+        <div class="text-center">
+          <span id="score-display" class="text-7xl font-mono font-bold text-cyan-400">180</span>
+          <span class="text-4xl text-gray-500">/ 200</span>
+        </div>
+        <p id="score-message" class="text-center mt-2 text-lg"></p>
+      </div>
+      
+      <div class="p-8 max-h-[55vh] overflow-auto" id="results-list">
+        <!-- Results populated by JS -->
+      </div>
+
+      <div class="p-6 border-t border-slate-700 flex gap-4">
+        <button onclick="restartQuiz()" 
+          class="flex-1 py-4 bg-gray-800 hover:bg-gray-700 rounded-2xl font-semibold">
+          Restart Quiz
+        </button>
+        <button onclick="window.location.reload()" 
+          class="flex-1 py-4 bg-white text-black hover:bg-gray-200 rounded-2xl font-semibold">
+          Try Again
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Quiz Data
+    const questions = [
+      {
+        id: 1,
+        question: "What is Arc primarily described as?",
+        options: [
+          "A) A DeFi protocol on Ethereum",
+          "B) An Economic Operating System (OS) for the internet, built as a stablecoin-native L1 blockchain",
+          "C) A centralized payment app",
+          "D) A Layer-2 scaling solution"
+        ],
+        correct: 1
+      },
+      {
+        id: 2,
+        question: "When was Arc's public testnet launched?",
+        options: [
+          "A) August 2025",
+          "B) October 28, 2025",
+          "C) December 2025",
+          "D) May 2026"
+        ],
+        correct: 1
+      },
+      {
+        id: 3,
+        question: "What unique feature does Arc use for gas fees?",
+        options: [
+          "A) Its native token only",
+          "B) Programmable stablecoins like USDC as native gas",
+          "C) ETH only",
+          "D) No gas fees"
+        ],
+        correct: 1
+      },
+      {
+        id: 4,
+        question: "What is Arc's target block time and finality characteristic?",
+        options: [
+          "A) 12 seconds with probabilistic finality",
+          "B) Deterministic sub-second finality (targeting ~500ms per block)",
+          "C) 2-minute blocks",
+          "D) Variable based on congestion"
+        ],
+        correct: 1
+      },
+      {
+        id: 5,
+        question: "Which of these is NOT a key design feature of Arc?",
+        options: [
+          "A) Opt-in configurable privacy",
+          "B) EVM compatibility",
+          "C) Native integration with Circle’s stack (USDC, CCTP, Gateway)",
+          "D) Proof-of-Work consensus"
+        ],
+        correct: 3
+      },
+      // ... Continuing for all 20
+      { id: 6, question: "How many launch and design participants were involved at Arc public testnet launch?", options: ["A) Fewer than 20", "B) Over 100 companies across finance, fintech, and tech", "C) Only Circle affiliates", "D) Exactly 50"], correct: 1 },
+      { id: 7, question: "Which major institutions have engaged with Arc testnet?", options: ["A) Only crypto-native projects", "B) BlackRock, Visa, HSBC, Goldman Sachs, AWS, etc.", "C) Solely retail users", "D) No institutional interest yet"], correct: 1 },
+      { id: 8, question: "Arc is purpose-built for which real-world finance areas?", options: ["A) Only meme coins", "B) Onchain lending, FX, payments, capital markets, and tokenized assets", "C) Gaming NFTs only", "D) Social media tokens"], correct: 1 },
+      { id: 9, question: "What role does Arc aim to play in the multichain ecosystem?", options: ["A) A isolated chain", "B) Global settlement hub that routes liquidity across chains using CCTP and Gateway", "C) Only a bridge", "D) A replacement for Ethereum"], correct: 1 },
+      { id: 10, question: "Arc supports what kind of privacy model?", options: ["A) Fully anonymous only", "B) Opt-in configurable privacy for compliance-friendly transactions", "C) No privacy features", "D) Mandatory public transactions"], correct: 1 },
+      { id: 11, question: "What is the Arc Builders Fund?", options: ["A) A charity program", "B) A Circle Ventures initiative funding early-stage projects building on Arc", "C) A testnet faucet", "D) A governance token sale"], correct: 1 },
+      { id: 12, question: "Which hackathon featured Arc bounties with winning teams building on testnet?", options: ["A) ETHGlobal Buenos Aires (with winners like OneTX, Coco, ArcBeam)", "B) Devcon only", "C) No hackathons yet", "D) Solana Hacker House"], correct: 0 },
+      { id: 13, question: "What is Arc House?", options: ["A) The official community hub/platform for Arc builders and discussions", "B) A physical office", "C) A trading platform", "D) A wallet app"], correct: 0 },
+      { id: 14, question: "How is Arc evolving toward governance?", options: ["A) Remains fully centralized forever", "B) Toward a distributed, community-driven system with expanded validators and governance", "C) No plans for community involvement", "D) Immediate full DAO launch"], correct: 1 },
+      { id: 15, question: "What testnet activities can community members participate in?", options: ["A) Only holding tokens", "B) Deploying smart contracts, bridging USDC, building dApps, and stress-testing", "C) Mining with GPUs", "D) Voting on mainnet upgrades immediately"], correct: 1 },
+      { id: 16, question: "What is the current status of Arc as of mid-2026?", options: ["A) Mainnet live with real value", "B) Public testnet live with strong activity (mainnet expected 2026)", "C) Shut down", "D) Private only"], correct: 1 },
+      { id: 17, question: "Circle has been exploring what for Arc?", options: ["A) Shutting it down", "B) A network token (ARC) and potential shift to broader Proof-of-Stake", "C) Making it permissioned only", "D) Removing stablecoin support"], correct: 1 },
+      { id: 18, question: "What percentage of Arc's initial token supply is planned for network participants/builders?", options: ["A) 10%", "B) Around 60% to participants who build, use, and contribute", "C) 100% to Circle", "D) Only for VCs"], correct: 1 },
+      { id: 19, question: "Which AI-related integration has been highlighted for Arc development?", options: ["A) No AI support", "B) Anthropic’s Claude Agent SDK and AI agent wallets", "C) Only basic chatbots", "D) Bitcoin integration"], correct: 1 },
+      { id: 20, question: "What is the main goal of the Arc community?", options: ["A) Speculative trading only", "B) Building and testing the Economic OS — driving onchain real-world finance, innovation, and eventual decentralized governance", "C) Competing with Solana memes", "D) Central bank digital currency replacement"], correct: 1 }
+    ];
+
+    let currentQuestion = 0;
+    let answers = new Array(questions.length).fill(null);
+
+    function renderQuestion() {
+      const container = document.getElementById('quiz-container');
+      const q = questions[currentQuestion];
+
+      let html = `
+        <div class="bg-slate-900 rounded-3xl p-8 question-card">
+          <div class="flex gap-3 mb-6">
+            <div class="w-8 h-8 bg-cyan-500 text-black font-bold rounded-2xl flex items-center justify-center flex-shrink-0">${q.id}</div>
+            <h2 class="text-2xl font-semibold leading-tight">${q.question}</h2>
+          </div>
+          
+          <div class="space-y-3" id="options">
+      `;
+
+      q.options.forEach((option, index) => {
+        const isSelected = answers[currentQuestion] === index;
+        html += `
+          <div onclick="selectAnswer(${index})" 
+               class="option cursor-pointer border border-slate-700 hover:border-cyan-400 ${isSelected ? 'selected' : ''} px-6 py-5 rounded-2xl text-lg">
+            ${option}
+          </div>
+        `;
+      });
+
+      html += `</div></div>`;
+      container.innerHTML = html;
+
+      // Update progress
+      document.getElementById('current-q').textContent = q.id;
+      document.getElementById('progress-bar').style.width = `${((q.id) / 20) * 100}%`;
+
+      // Show submit button on last question
+      document.getElementById('submit-btn').classList.toggle('hidden', currentQuestion !== 19);
+      document.getElementById('next-btn').classList.toggle('hidden', currentQuestion === 19);
+    }
+
+    window.selectAnswer = function(index) {
+      answers[currentQuestion] = index;
+      renderQuestion();
+    }
+
+    window.nextQuestion = function() {
+      if (currentQuestion < 19) {
+        currentQuestion++;
+        renderQuestion();
+      }
+    }
+
+    window.prevQuestion = function() {
+      if (currentQuestion > 0) {
+        currentQuestion--;
+        renderQuestion();
+      }
+    }
+
+    window.submitQuiz = function() {
+      let score = 0;
+      const resultsHTML = questions.map((q, i) => {
+        const userAnswer = answers[i];
+        const isCorrect = userAnswer === q.correct;
+        if (isCorrect) score += 10;
+
+        return `
+          <div class="mb-6 p-6 rounded-2xl ${isCorrect ? 'bg-green-900/30 border border-green-500' : 'bg-red-900/30 border border-red-500'}">
+            <div class="flex justify-between">
+              <p class="font-medium">${q.id}. ${q.question}</p>
+              <span class="font-mono ${isCorrect ? 'text-green-400' : 'text-red-400'}">
+                ${isCorrect ? '✓' : '✕'}
+              </span>
+            </div>
+            <div class="mt-4 text-sm">
+              <p class="text-gray-400">Your answer: <span class="${isCorrect ? 'text-green-400' : 'text-red-400'}">${q.options[userAnswer] || 'Not answered'}</span></p>
+              ${!isCorrect ? `<p class="text-cyan-400 mt-1">Correct: ${q.options[q.correct]}</p>` : ''}
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      document.getElementById('score-display').textContent = score;
+      document.getElementById('score-message').innerHTML = score === 200 
+        ? "🏆 Perfect! You know Arc inside out!" 
+        : score >= 150 
+          ? "Excellent! You're ready to build on Arc." 
+          : "Good effort! Keep learning about Arc.";
+
+      document.getElementById('results-list').innerHTML = resultsHTML;
+      document.getElementById('results-modal').classList.remove('hidden');
+    }
+
+    window.restartQuiz = function() {
+      currentQuestion = 0;
+      answers = new Array(questions.length).fill(null);
+      document.getElementById('results-modal').classList.add('hidden');
+      renderQuestion();
+    }
+
+    // Initialize
+    renderQuestion();
+  </script>
+</body>
+</html>
+<button onclick="dailyCheckIn()" 
+  class="px-6 py-3 bg-purple-600 hover:bg-purple-500 rounded-2xl font-medium">
+  <i class="fa-solid fa-calendar-check"></i> Daily Check-in
+</button>
